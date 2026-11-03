@@ -61,4 +61,4 @@ python3 scripts/build_data.py
 
 ## Built with
 
-[Leaflet](https://leafletjs.com/) · [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster) · basemap tiles © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors, © [CARTO](https://carto.com/attributions)
+[Leaflet](https://leafletjs.com/) · [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster) · basemap © [Esri](https://www.esri.com/) (World Light Gray Canvas), © [OpenStreetMap](https://www.openstreetmap.org/copyright) contributors

@@ -89,7 +89,7 @@
     <footer>
       Data: <a href="https://www.nysed.gov/charter-schools/charter-schools-directory" target="_blank" rel="noopener">NYSED Charter School Directory</a> (Sept 2025) +
       <a href="https://nces.ed.gov/programs/edge/Geographic/SchoolLocations" target="_blank" rel="noopener">NCES EDGE / CCD 2024–25</a>.
-      Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>, © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>.
+      Basemap © <a href="https://www.esri.com/" target="_blank" rel="noopener">Esri</a>, © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors.
     </footer>
   </aside>
   <div id="map" role="region" aria-label="Map of NYC charter schools"></div>
@@ -111,12 +111,14 @@
   const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 
   // Map
-  const map = L.map("map", { zoomControl: true, preferCanvas: true }).setView([40.72, -73.94], 11);
-  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
-    maxZoom: 19, subdomains: "abcd",
-    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  const map = L.map("map", { zoomControl: true, preferCanvas: true, maxZoom: 16 }).setView([40.72, -73.94], 11);
+  // Esri light-gray basemap + labels: free, no API key required.
+  const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/";
+  L.tileLayer(ESRI + "World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}", {
+    maxZoom: 16, attribution: 'Tiles &copy; <a href="https://www.esri.com/">Esri</a> &mdash; Esri, HERE, Garmin, &copy; OpenStreetMap contributors'
   }).addTo(map);
-  const cluster = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 40, disableClusteringAtZoom: 15 });
+  L.tileLayer(ESRI + "World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}", { maxZoom: 16, pane: "shadowPane" }).addTo(map);
+  const cluster = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 40, disableClusteringAtZoom: 14 });
   map.addLayer(cluster);
 
   const legend = L.control({ position: "bottomright" });
@@ -202,6 +204,7 @@
   det.querySelector("ul").innerHTML = un.map(n => `<li>${esc(n)}</li>`).join("");
 
   render();
+  map.fitBounds(L.latLngBounds(items.map(i => [i.lat, i.lon])), { padding: [20, 20] });
 })();
 </script>
 </body>
