@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NYC Charter Schools Map</title>
+<meta name="description" content="Interactive map of every charter school in New York City, built from NYSED and NCES data.">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="vendor/markercluster/MarkerCluster.css">
+<link rel="stylesheet" href="vendor/markercluster/MarkerCluster.Default.css">
+<style>
+  :root{
+    --ink:#1d2433; --muted:#5b6475; --line:#e3e6ec; --bg:#f7f8fa; --panel:#fff;
+    --bronx:#d1495b; --brooklyn:#2e86ab; --manhattan:#edae49; --queens:#00916e; --staten:#7b5ea7;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;color:var(--ink);background:var(--bg)}
+  .app{display:grid;grid-template-columns:360px 1fr;height:100vh}
+  aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+  header{padding:18px 18px 12px;border-bottom:1px solid var(--line)}
+  h1{font-size:19px;margin:0 0 4px;letter-spacing:-.01em}
+  .sub{color:var(--muted);font-size:12.5px;margin:0}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:12px 18px;border-bottom:1px solid var(--line)}
+  .stat{background:var(--bg);border-radius:8px;padding:8px 10px}
+  .stat b{display:block;font-size:18px}
+  .stat span{color:var(--muted);font-size:11.5px}
+  .filters{padding:12px 18px;border-bottom:1px solid var(--line);display:grid;gap:10px}
+  .filters input[type=search]{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit}
+  .row{display:flex;flex-wrap:wrap;gap:6px}
+  .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin-bottom:4px}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:999px;padding:4px 10px;font:inherit;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+  .chip[aria-pressed=false]{opacity:.45}
+  .dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+  select{padding:6px 8px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff}
+  .list{overflow:auto;flex:1;min-height:0}
+  .item{padding:10px 18px;border-bottom:1px solid var(--line);cursor:pointer}
+  .item:hover{background:var(--bg)}
+  .item .n{font-weight:600}
+  .item .m{color:var(--muted);font-size:12.5px}
+  .count{padding:8px 18px;color:var(--muted);font-size:12px;border-bottom:1px solid var(--line)}
+  details{padding:10px 18px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted)}
+  details summary{cursor:pointer;color:var(--ink)}
+  details ul{padding-left:18px;margin:6px 0}
+  footer{padding:10px 18px;border-top:1px solid var(--line);font-size:11.5px;color:var(--muted)}
+  footer a{color:inherit}
+  #map{height:100%}
+  .leaflet-popup-content{margin:12px 14px;font-size:13px}
+  .pop h3{margin:0 0 6px;font-size:14px}
+  .pop table{border-collapse:collapse}
+  .pop td{padding:1px 8px 1px 0;vertical-align:top}
+  .pop td:first-child{color:var(--muted)}
+  .marker-cluster-small,.marker-cluster-medium,.marker-cluster-large{background:rgba(29,36,51,.18)}
+  .marker-cluster-small div,.marker-cluster-medium div,.marker-cluster-large div{background:rgba(29,36,51,.82);color:#fff;font-weight:600}
+  .legend{background:#fff;padding:8px 10px;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.2);font-size:12px;line-height:1.7}
+  @media (max-width:800px){
+    .app{grid-template-columns:1fr;grid-template-rows:auto 55vh;height:auto}
+    aside{order:2;border-right:0}
+    .list{max-height:50vh}
+    #map{height:55vh}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <header>
+      <h1>NYC Charter Schools</h1>
+      <p class="sub">Every charter school in the five boroughs, 2025–26</p>
+    </header>
+    <div class="stats">
+      <div class="stat"><b id="s-schools">–</b><span>schools shown</span></div>
+      <div class="stat"><b id="s-students">–</b><span>students</span></div>
+      <div class="stat"><b id="s-new">–</b><span>new, not yet mapped</span></div>
+    </div>
+    <div class="filters">
+      <input id="q" type="search" placeholder="Search by name, address or ZIP…" aria-label="Search schools">
+      <div>
+        <div class="lbl">Borough</div>
+        <div class="row" id="boroughs"></div>
+      </div>
+      <div class="row">
+        <label>Authorizer<br><select id="auth"><option value="">All</option><option>SUNY</option><option>Regents</option><option>NYCDOE</option></select></label>
+        <label>Level<br><select id="level"><option value="">All</option><option>Elementary</option><option>Middle</option><option>High</option><option>Secondary</option><option>Other</option></select></label>
+      </div>
+    </div>
+    <div class="count" id="count"></div>
+    <div class="list" id="list"></div>
+    <details id="unmapped"><summary></summary><p>These schools appear in the state's 2025–26 directory but opened too recently to be in the federal location data yet.</p><ul></ul></details>
+    <footer>
+      Data: <a href="https://www.nysed.gov/charter-schools/charter-schools-directory" target="_blank" rel="noopener">NYSED Charter School Directory</a> (Sept 2025) +
+      <a href="https://nces.ed.gov/programs/edge/Geographic/SchoolLocations" target="_blank" rel="noopener">NCES EDGE / CCD 2024–25</a>.
+      Map © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>, © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>.
+    </footer>
+  </aside>
+  <div id="map" role="region" aria-label="Map of NYC charter schools"></div>
+</div>
+
+<script src="vendor/leaflet/leaflet.js"></script>
+<script src="vendor/markercluster/leaflet.markercluster.js"></script>
+<script src="data/schools.js"></script>
+<script>
+(function () {
+  const DATA = window.CHARTER_SCHOOLS;
+  const COLORS = {
+    "Bronx": "var(--bronx)", "Brooklyn": "var(--brooklyn)", "Manhattan": "var(--manhattan)",
+    "Queens": "var(--queens)", "Staten Island": "var(--staten)"
+  };
+  const HEX = {"Bronx":"#d1495b","Brooklyn":"#2e86ab","Manhattan":"#edae49","Queens":"#00916e","Staten Island":"#7b5ea7"};
+  const state = { q: "", auth: "", level: "", boroughs: new Set(Object.keys(COLORS)) };
+  const fmt = n => n == null ? "–" : n.toLocaleString("en-US");
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+  // Map
+  const map = L.map("map", { zoomControl: true, preferCanvas: true }).setView([40.72, -73.94], 11);
+  L.tileLayer("https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png", {
+    maxZoom: 19, subdomains: "abcd",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+  }).addTo(map);
+  const cluster = L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 40, disableClusteringAtZoom: 15 });
+  map.addLayer(cluster);
+
+  const legend = L.control({ position: "bottomright" });
+  legend.onAdd = () => {
+    const d = L.DomUtil.create("div", "legend");
+    d.innerHTML = Object.keys(HEX).map(b => `<span class="dot" style="background:${HEX[b]}"></span> ${b}`).join("<br>");
+    return d;
+  };
+  legend.addTo(map);
+
+  function popup(p) {
+    const rows = [
+      ["Address", p.address], ["Grades", p.grades], ["Enrollment", fmt(p.enrollment) + " (2024–25)"],
+      ["District", p.district], ["Authorizer", p.authorizer], ["Opened", p.year_opened], ["Phone", p.phone]
+    ].filter(r => r[1]);
+    const gmaps = "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(p.name + " " + p.address);
+    return `<div class="pop"><h3>${esc(p.name)}</h3><table>${rows.map(r => `<tr><td>${r[0]}</td><td>${esc(r[1])}</td></tr>`).join("")}</table>
+      <p style="margin:6px 0 0"><a href="${gmaps}" target="_blank" rel="noopener">Open in Google Maps ↗</a></p></div>`;
+  }
+
+  const items = DATA.features.map(f => {
+    const p = f.properties;
+    const [lon, lat] = f.geometry.coordinates;
+    const marker = L.circleMarker([lat, lon], {
+      radius: 7, weight: 1.5, color: "#fff", fillColor: HEX[p.borough], fillOpacity: .9
+    }).bindPopup(() => popup(p), { maxWidth: 300 });
+    marker.bindTooltip(p.name, { direction: "top", offset: [0, -6] });
+    const hay = [p.name, p.address, p.zip, p.district, p.borough].join(" ").toLowerCase();
+    return { p, marker, hay, lat, lon };
+  }).sort((a, b) => a.p.name.localeCompare(b.p.name));
+
+  // Borough chips
+  const bWrap = document.getElementById("boroughs");
+  Object.keys(HEX).forEach(b => {
+    const btn = document.createElement("button");
+    btn.className = "chip"; btn.type = "button"; btn.setAttribute("aria-pressed", "true");
+    const n = items.filter(i => i.p.borough === b).length;
+    btn.innerHTML = `<span class="dot" style="background:${HEX[b]}"></span>${b} <span style="color:var(--muted)">${n}</span>`;
+    btn.onclick = () => {
+      state.boroughs.has(b) ? state.boroughs.delete(b) : state.boroughs.add(b);
+      btn.setAttribute("aria-pressed", state.boroughs.has(b));
+      render();
+    };
+    bWrap.appendChild(btn);
+  });
+
+  const listEl = document.getElementById("list");
+  function render() {
+    const q = state.q.trim().toLowerCase();
+    const shown = items.filter(i =>
+      state.boroughs.has(i.p.borough) &&
+      (!state.auth || i.p.authorizer === state.auth) &&
+      (!state.level || i.p.level === state.level) &&
+      (!q || i.hay.includes(q)));
+    cluster.clearLayers();
+    cluster.addLayers(shown.map(i => i.marker));
+    document.getElementById("s-schools").textContent = fmt(shown.length);
+    document.getElementById("s-students").textContent = fmt(shown.reduce((s, i) => s + (i.p.enrollment || 0), 0));
+    document.getElementById("count").textContent =
+      shown.length === items.length ? `Showing all ${items.length} mapped schools` : `Showing ${shown.length} of ${items.length} mapped schools`;
+    listEl.innerHTML = "";
+    const frag = document.createDocumentFragment();
+    shown.forEach(i => {
+      const d = document.createElement("div");
+      d.className = "item"; d.tabIndex = 0;
+      d.innerHTML = `<div class="n"><span class="dot" style="background:${HEX[i.p.borough]}"></span> ${esc(i.p.name)}</div>
+        <div class="m">${esc(i.p.address)} · Grades ${esc(i.p.grades)}</div>`;
+      const go = () => cluster.zoomToShowLayer(i.marker, () => i.marker.openPopup());
+      d.onclick = go; d.onkeydown = e => { if (e.key === "Enter") go(); };
+      frag.appendChild(d);
+    });
+    listEl.appendChild(frag);
+  }
+
+  document.getElementById("q").addEventListener("input", e => { state.q = e.target.value; render(); });
+  document.getElementById("auth").addEventListener("change", e => { state.auth = e.target.value; render(); });
+  document.getElementById("level").addEventListener("change", e => { state.level = e.target.value; render(); });
+
+  const un = DATA.metadata.not_yet_mapped || [];
+  document.getElementById("s-new").textContent = un.length;
+  const det = document.getElementById("unmapped");
+  det.querySelector("summary").textContent = `${un.length} newly opened schools not yet mapped`;
+  det.querySelector("ul").innerHTML = un.map(n => `<li>${esc(n)}</li>`).join("");
+
+  render();
+})();
+</script>
+</body>
+</html>
